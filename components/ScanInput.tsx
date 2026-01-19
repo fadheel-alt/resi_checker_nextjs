@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { markAsScanned } from '@/db/database'
 import CameraScanner from './CameraScanner'
+import ScanToast from './ScanToast'
+import { successSound } from '@/utils/soundPlayer'
 
 const FEEDBACK_DURATION = 2000
 const SCAN_DEBOUNCE_MS = 500
@@ -16,20 +18,28 @@ interface ScanInputProps {
   onScanComplete?: () => void
 }
 
+interface ToastData {
+  type: 'success' | 'error' | 'warning'
+  trackingNumber: string
+  message: string
+}
+
 export default function ScanInput({ onScanComplete }: ScanInputProps) {
   const [mode, setMode] = useState<'camera' | 'manual'>('manual')
   const [inputValue, setInputValue] = useState('')
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
+  const [toastData, setToastData] = useState<ToastData | null>(null)
   const [processing, setProcessing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const feedbackTimeout = useRef<NodeJS.Timeout | null>(null)
   const lastScanRef = useRef<{ value: string; timestamp: number } | null>(null)
 
-  // Detect device type for default mode
+  // Preload sound on component mount
   useEffect(() => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    setMode(isMobile ? 'camera' : 'manual')
+    successSound.preload()
   }, [])
+
+  // Mobile detection removed - manual mode is now default for all devices
 
   // Auto-focus on mount dan setiap kali feedback berubah (manual mode only)
   useEffect(() => {
@@ -47,7 +57,7 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
     }
   }, [])
 
-  const showFeedback = (type: 'success' | 'warning' | 'error', message: string) => {
+  const showFeedback = (type: 'success' | 'warning' | 'error', message: string, trackingNumber: string) => {
     // Clear previous timeout
     if (feedbackTimeout.current) {
       clearTimeout(feedbackTimeout.current)
@@ -59,6 +69,23 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
     feedbackTimeout.current = setTimeout(() => {
       setFeedback(null)
     }, FEEDBACK_DURATION)
+
+    // Show toast notification
+    let toastMessage = ''
+    if (type === 'success') {
+      toastMessage = 'RESI VALID'
+      successSound.play() // Play sound only on success
+    } else if (type === 'error') {
+      toastMessage = 'Resi tidak ditemukan'
+    } else if (type === 'warning') {
+      toastMessage = 'Sudah discan'
+    }
+
+    setToastData({
+      type,
+      trackingNumber,
+      message: toastMessage,
+    })
   }
 
   const processScan = useCallback(async (trackingNumber: string) => {
@@ -80,23 +107,21 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
       const result = await markAsScanned(trackingNumber)
 
       if (result.success) {
-        showFeedback('success', `${trackingNumber}`)
+        showFeedback('success', `${trackingNumber}`, trackingNumber)
         onScanComplete?.()
       } else if (result.reason === 'not_found') {
-        showFeedback('error', `Tidak ditemukan: ${trackingNumber}`)
+        showFeedback('error', `Tidak ditemukan: ${trackingNumber}`, trackingNumber)
       } else if (result.reason === 'already_scanned') {
-        showFeedback('warning', `Sudah discan: ${trackingNumber}`)
+        showFeedback('warning', `Sudah discan: ${trackingNumber}`, trackingNumber)
       }
     } catch (err: any) {
-      showFeedback('error', `Error: ${err.message}`)
+      showFeedback('error', `Error: ${err.message}`, trackingNumber)
     } finally {
       setProcessing(false)
     }
   }, [onScanComplete])
 
-  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return
-
+  const handleManualSubmit = async () => {
     const trackingNumber = inputValue.trim()
     if (!trackingNumber) {
       setInputValue('')
@@ -106,6 +131,11 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
     await processScan(trackingNumber)
     setInputValue('')
     inputRef.current?.focus()
+  }
+
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return
+    await handleManualSubmit()
   }
 
   const handleCameraScan = useCallback(async (trackingNumber: string) => {
@@ -189,7 +219,7 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
       {mode === 'camera' ? (
         <CameraScanner
           onScanSuccess={handleCameraScan}
-          onError={(err) => showFeedback('error', err)}
+          onError={(err) => showFeedback('error', err, '')}
         />
       ) : (
         <div className="relative">
@@ -205,12 +235,22 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck="false"
-            className={`w-full p-3 text-lg border-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${getFeedbackStyle()} disabled:opacity-50`}
+            className={`w-full py-3 pl-3 pr-24 text-lg border-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${getFeedbackStyle()} disabled:opacity-50`}
           />
 
-          {/* Processing indicator */}
+          {/* Submit Button */}
+          <button
+            onClick={handleManualSubmit}
+            disabled={processing || !inputValue.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            aria-label="Submit scan"
+          >
+            {processing ? '...' : 'SCAN'}
+          </button>
+
+          {/* Processing indicator (shown when processing) */}
           {processing && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="absolute right-20 top-1/2 -translate-y-1/2">
               <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
@@ -230,6 +270,16 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
           ? 'Arahkan camera ke barcode untuk scan otomatis'
           : 'Arahkan cursor ke input, lalu scan barcode dengan scanner'}
       </p>
+
+      {/* Toast Notification */}
+      {toastData && (
+        <ScanToast
+          type={toastData.type}
+          trackingNumber={toastData.trackingNumber}
+          message={toastData.message}
+          onClose={() => setToastData(null)}
+        />
+      )}
     </div>
   )
 }

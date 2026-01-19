@@ -5,3 +5,34 @@
 body {
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* Toast animations */
+@keyframes slideInDown {
+  from {
+    transform: translateY(-100%) translateX(var(--tw-translate-x, 0));
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) translateX(var(--tw-translate-x, 0));
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutDown {
+  from {
+    transform: translateY(0) translateX(var(--tw-translate-x, 0));
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%) translateX(var(--tw-translate-x, 0));
+    opacity: 0;
+  }
+}
+
+.animate-slide-in-down {
+  animation: slideInDown 0.3s ease-out forwards;
+}
+
+.animate-slide-out-down {
+  animation: slideOutDown 0.3s ease-in forwards;
+}
