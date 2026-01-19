@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase'
 interface Order {
   orderId: string
   trackingNumber: string
+  variationName?: string
+  receiverName?: string
 }
 
 interface AddOrdersResult {
@@ -34,6 +36,8 @@ export async function addOrders(orders: Order[]): Promise<AddOrdersResult> {
       .insert({
         order_id: order.orderId,
         tracking_number: order.trackingNumber,
+        variation_name: order.variationName || null,
+        receiver_name: order.receiverName || null,
         status: 'pending'
       })
       .select()
@@ -108,18 +112,21 @@ export async function getStats(): Promise<StatsResult> {
   }
 }
 
-// Get pending orders
+// Get pending orders (now returns all orders with status for green/yellow display)
 export async function getPendingOrders() {
   const { data } = await supabase
     .from('orders')
     .select('*')
-    .eq('status', 'pending')
+    .order('status', { ascending: true }) // pending first, then scanned
     .order('created_at', { ascending: false })
 
   return (data || []).map((order: any) => ({
     id: order.id,
     trackingNumber: order.tracking_number,
-    orderId: order.order_id
+    orderId: order.order_id,
+    variationName: order.variation_name,
+    receiverName: order.receiver_name,
+    status: order.status
   }))
 }
 

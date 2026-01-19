@@ -12,7 +12,12 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
   const [parsing, setParsing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [parsedData, setParsedData] = useState<any>(null)
-  const [mapping, setMapping] = useState({ trackingColumn: '', orderColumn: '' })
+  const [mapping, setMapping] = useState({
+    trackingColumn: '',
+    orderColumn: '',
+    variationColumn: '',
+    receiverColumn: ''
+  })
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -30,7 +35,9 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
       setParsedData(data)
       setMapping({
         trackingColumn: data.suggestedMapping.trackingColumn || '',
-        orderColumn: data.suggestedMapping.orderColumn || ''
+        orderColumn: data.suggestedMapping.orderColumn || '',
+        variationColumn: data.suggestedMapping.variationColumn || '',
+        receiverColumn: data.suggestedMapping.receiverColumn || ''
       })
     } catch (err: any) {
       setError(err.message)
@@ -53,7 +60,9 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
       const { orders, errors: parseErrors } = extractOrders(
         parsedData.rows,
         mapping.trackingColumn,
-        mapping.orderColumn
+        mapping.orderColumn,
+        mapping.variationColumn,
+        mapping.receiverColumn
       )
 
       if (orders.length === 0) {
@@ -72,7 +81,12 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
 
       // Reset state
       setParsedData(null)
-      setMapping({ trackingColumn: '', orderColumn: '' })
+      setMapping({
+        trackingColumn: '',
+        orderColumn: '',
+        variationColumn: '',
+        receiverColumn: ''
+      })
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
@@ -87,7 +101,12 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
 
   const handleCancel = () => {
     setParsedData(null)
-    setMapping({ trackingColumn: '', orderColumn: '' })
+    setMapping({
+      trackingColumn: '',
+      orderColumn: '',
+      variationColumn: '',
+      receiverColumn: ''
+    })
     setError(null)
     setResult(null)
     if (fileInputRef.current) {
@@ -182,6 +201,44 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
             </select>
           </div>
 
+          {/* Variation Column */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kolom Nama Variasi (opsional)
+            </label>
+            <select
+              value={mapping.variationColumn}
+              onChange={(e) => setMapping({ ...mapping, variationColumn: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Pilih Kolom --</option>
+              {parsedData.headers.map((header: string) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Receiver Name Column */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kolom Nama Penerima (opsional)
+            </label>
+            <select
+              value={mapping.receiverColumn}
+              onChange={(e) => setMapping({ ...mapping, receiverColumn: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Pilih Kolom --</option>
+              {parsedData.headers.map((header: string) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Preview */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">Preview (5 baris pertama)</p>
@@ -191,19 +248,41 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
                   <tr>
                     <th className="px-2 py-1 border-b text-left">Tracking</th>
                     <th className="px-2 py-1 border-b text-left">Order ID</th>
+                    <th className="px-2 py-1 border-b text-left">Variasi</th>
+                    <th className="px-2 py-1 border-b text-left">Penerima</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {parsedData.rows.slice(0, 5).map((row: any, i: number) => (
-                    <tr key={i} className="border-b">
-                      <td className="px-2 py-1 font-mono">
-                        {mapping.trackingColumn ? row[mapping.trackingColumn] || '-' : '-'}
-                      </td>
-                      <td className="px-2 py-1">
-                        {mapping.orderColumn ? row[mapping.orderColumn] || '-' : '-'}
-                      </td>
-                    </tr>
-                  ))}
+                  {parsedData.rows.slice(0, 5).map((row: any, i: number) => {
+                    // Extract variation if product_info column is selected
+                    let variationPreview = '-'
+                    if (mapping.variationColumn) {
+                      const rawValue = row[mapping.variationColumn] || ''
+                      if (mapping.variationColumn.toLowerCase() === 'product_info') {
+                        const match = rawValue.match(/Nama Variasi:([^;]+?)(?:;\s*Harga:|Harga:)/i)
+                        variationPreview = match ? match[1].trim() : '-'
+                      } else {
+                        variationPreview = rawValue || '-'
+                      }
+                    }
+
+                    return (
+                      <tr key={i} className="border-b">
+                        <td className="px-2 py-1 font-mono">
+                          {mapping.trackingColumn ? row[mapping.trackingColumn] || '-' : '-'}
+                        </td>
+                        <td className="px-2 py-1">
+                          {mapping.orderColumn ? row[mapping.orderColumn] || '-' : '-'}
+                        </td>
+                        <td className="px-2 py-1 max-w-xs truncate" title={variationPreview}>
+                          {variationPreview}
+                        </td>
+                        <td className="px-2 py-1">
+                          {mapping.receiverColumn ? row[mapping.receiverColumn] || '-' : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
