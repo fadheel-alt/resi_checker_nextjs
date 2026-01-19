@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { markAsScanned } from '@/db/database'
 import CameraScanner from './CameraScanner'
 
 const FEEDBACK_DURATION = 2000
+const SCAN_DEBOUNCE_MS = 500
 
 interface FeedbackState {
   type: 'success' | 'warning' | 'error'
@@ -22,6 +23,7 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
   const [processing, setProcessing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const feedbackTimeout = useRef<NodeJS.Timeout | null>(null)
+  const lastScanRef = useRef<{ value: string; timestamp: number } | null>(null)
 
   // Detect device type for default mode
   useEffect(() => {
@@ -59,7 +61,19 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
     }, FEEDBACK_DURATION)
   }
 
-  const processScan = async (trackingNumber: string) => {
+  const processScan = useCallback(async (trackingNumber: string) => {
+    // Debounce: ignore if same value scanned within debounce window
+    const now = Date.now()
+    if (
+      lastScanRef.current &&
+      lastScanRef.current.value === trackingNumber &&
+      now - lastScanRef.current.timestamp < SCAN_DEBOUNCE_MS
+    ) {
+      console.log('Duplicate scan detected, ignoring...')
+      return
+    }
+
+    lastScanRef.current = { value: trackingNumber, timestamp: now }
     setProcessing(true)
 
     try {
@@ -78,7 +92,7 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
     } finally {
       setProcessing(false)
     }
-  }
+  }, [onScanComplete])
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return
@@ -94,9 +108,9 @@ export default function ScanInput({ onScanComplete }: ScanInputProps) {
     inputRef.current?.focus()
   }
 
-  const handleCameraScan = async (trackingNumber: string) => {
+  const handleCameraScan = useCallback(async (trackingNumber: string) => {
     await processScan(trackingNumber)
-  }
+  }, [processScan])
 
   const getFeedbackStyle = () => {
     if (!feedback) return 'border-gray-300 bg-white'

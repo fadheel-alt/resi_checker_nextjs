@@ -10,6 +10,8 @@ interface CameraScannerProps {
 export default function CameraScanner({ onScanSuccess, onError }: CameraScannerProps) {
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isInitializing, setIsInitializing] = useState(false)
+  const [isStopping, setIsStopping] = useState(false)
   const html5QrCodeRef = useRef<any>(null)
 
   useEffect(() => {
@@ -19,6 +21,20 @@ export default function CameraScanner({ onScanSuccess, onError }: CameraScannerP
       // Only run in browser environment
       if (typeof window === 'undefined') return
 
+      // Prevent multiple initializations
+      if (isInitializing) {
+        console.log('Already initializing, skipping...')
+        return
+      }
+
+      // Wait for any ongoing stop operation
+      if (isStopping) {
+        console.log('Scanner is stopping, waiting...')
+        return
+      }
+
+      setIsInitializing(true)
+
       try {
         setScanning(true)
         setError(null)
@@ -26,7 +42,10 @@ export default function CameraScanner({ onScanSuccess, onError }: CameraScannerP
         // Dynamically import html5-qrcode only in browser
         const { Html5Qrcode } = await import('html5-qrcode')
 
-        if (!mounted) return
+        if (!mounted) {
+          setIsInitializing(false)
+          return
+        }
 
         html5QrCodeRef.current = new Html5Qrcode("camera-reader")
 
@@ -51,19 +70,34 @@ export default function CameraScanner({ onScanSuccess, onError }: CameraScannerP
           setScanning(false)
           onError?.(err.message)
         }
+      } finally {
+        setIsInitializing(false)
       }
     }
 
     const stopScanner = async () => {
-      if (html5QrCodeRef.current) {
-        try {
-          await html5QrCodeRef.current.stop()
-          html5QrCodeRef.current.clear()
-        } catch (err) {
-          console.error('Error stopping scanner:', err)
-        }
+      // Prevent concurrent stops
+      if (isStopping) {
+        console.log('Already stopping, skipping...')
+        return
       }
-      setScanning(false)
+
+      if (!html5QrCodeRef.current) {
+        setScanning(false)
+        return
+      }
+
+      setIsStopping(true)
+
+      try {
+        await html5QrCodeRef.current.stop()
+        html5QrCodeRef.current.clear()
+      } catch (err) {
+        console.error('Error stopping scanner:', err)
+      } finally {
+        setIsStopping(false)
+        setScanning(false)
+      }
     }
 
     startScanner()
