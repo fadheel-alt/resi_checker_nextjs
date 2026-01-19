@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getStats, clearAllOrders } from '@/db/database'
+import { getStats, clearAllOrders, resetScan } from '@/db/database'
 
 interface DashboardProps {
   refreshTrigger: number
+  onDataChange?: () => void
 }
 
 interface StatsData {
@@ -13,11 +14,13 @@ interface StatsData {
   pending: number
 }
 
-export default function Dashboard({ refreshTrigger }: DashboardProps) {
+export default function Dashboard({ refreshTrigger, onDataChange }: DashboardProps) {
   const [stats, setStats] = useState<StatsData>({ total: 0, scanned: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
   const [clearing, setClearing] = useState(false)
+  const [resettingScan, setResettingScan] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showResetScanConfirm, setShowResetScanConfirm] = useState(false)
 
   const loadStats = useCallback(async () => {
     try {
@@ -40,10 +43,26 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       await clearAllOrders()
       setStats({ total: 0, scanned: 0, pending: 0 })
       setShowConfirm(false)
+      onDataChange?.()
     } catch (err) {
       console.error('Error clearing data:', err)
     } finally {
       setClearing(false)
+    }
+  }
+
+  const handleResetScan = async () => {
+    setResettingScan(true)
+    try {
+      await resetScan()
+      // Refresh stats after reset
+      await loadStats()
+      setShowResetScanConfirm(false)
+      onDataChange?.()
+    } catch (err) {
+      console.error('Error resetting scan:', err)
+    } finally {
+      setResettingScan(false)
     }
   }
 
@@ -62,12 +81,22 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       <div className="flex justify-between items-center mb-3">
         <h2 className="font-semibold text-gray-800">Status</h2>
         {stats.total > 0 && (
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="text-xs text-red-600 hover:text-red-800"
-          >
-            Reset
-          </button>
+          <div className="flex gap-2">
+            {stats.scanned > 0 && (
+              <button
+                onClick={() => setShowResetScanConfirm(true)}
+                className="text-xs text-blue-600 hover:text-blue-800"
+              >
+                Reset Scan
+              </button>
+            )}
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="text-xs text-red-600 hover:text-red-800"
+            >
+              Reset Data
+            </button>
+          </div>
         )}
       </div>
 
@@ -110,7 +139,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         </p>
       )}
 
-      {/* Confirm Dialog */}
+      {/* Confirm Dialog - Reset Data */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-4 max-w-sm w-full">
@@ -129,6 +158,34 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
               <button
                 onClick={() => setShowConfirm(false)}
                 disabled={clearing}
+                className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300 disabled:opacity-50"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Dialog - Reset Scan */}
+      {showResetScanConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 max-w-sm w-full">
+            <h3 className="font-semibold text-gray-800 mb-2">Reset Scan?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Semua pesanan yang sudah di-scan akan dikembalikan ke status pending. Data pesanan tetap tersimpan.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleResetScan}
+                disabled={resettingScan}
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {resettingScan ? 'Mereset...' : 'Ya, Reset Scan'}
+              </button>
+              <button
+                onClick={() => setShowResetScanConfirm(false)}
+                disabled={resettingScan}
                 className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300 disabled:opacity-50"
               >
                 Batal

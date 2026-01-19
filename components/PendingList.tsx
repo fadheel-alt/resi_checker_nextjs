@@ -13,6 +13,9 @@ interface Order {
   orderId?: string
   variationName?: string
   receiverName?: string
+  buyerUserName?: string
+  jumlah?: string
+  shippingMethod?: string
   status: 'pending' | 'scanned'
 }
 
@@ -91,6 +94,11 @@ export default function PendingList({ refreshTrigger }: PendingListProps) {
                   Order: {order.orderId}
                 </div>
               )}
+              {order.buyerUserName && (
+                <div className={`text-xs ${detailColor} mt-1`}>
+                  Pembeli: {order.buyerUserName}
+                </div>
+              )}
               {order.variationName && (
                 <div className={`text-xs ${detailColor} mt-1`}>
                   Variasi: {order.variationName}
@@ -99,6 +107,16 @@ export default function PendingList({ refreshTrigger }: PendingListProps) {
               {order.receiverName && (
                 <div className={`text-xs ${detailColor} mt-1`}>
                   Penerima: {order.receiverName}
+                </div>
+              )}
+              {order.jumlah && (
+                <div className={`text-xs ${detailColor} mt-1`}>
+                  Jumlah: {order.jumlah}
+                </div>
+              )}
+              {order.shippingMethod && (
+                <div className={`text-xs ${detailColor} mt-1`}>
+                  Pengiriman: {order.shippingMethod}
                 </div>
               )}
             </div>

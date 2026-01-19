@@ -5,6 +5,9 @@ interface Order {
   trackingNumber: string
   variationName?: string
   receiverName?: string
+  buyerUserName?: string
+  jumlah?: string
+  shippingMethod?: string
 }
 
 interface AddOrdersResult {
@@ -31,13 +34,16 @@ export async function addOrders(orders: Order[]): Promise<AddOrdersResult> {
   const results: AddOrdersResult = { success: 0, duplicates: [], errors: [] }
 
   for (const order of orders) {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('orders')
       .insert({
         order_id: order.orderId,
         tracking_number: order.trackingNumber,
         variation_name: order.variationName || null,
         receiver_name: order.receiverName || null,
+        buyer_user_name: order.buyerUserName || null,
+        jumlah: order.jumlah || null,
+        shipping_method: order.shippingMethod || null,
         status: 'pending'
       })
       .select()
@@ -126,6 +132,9 @@ export async function getPendingOrders() {
     orderId: order.order_id,
     variationName: order.variation_name,
     receiverName: order.receiver_name,
+    buyerUserName: order.buyer_user_name,
+    jumlah: order.jumlah,
+    shippingMethod: order.shipping_method,
     status: order.status
   }))
 }
@@ -136,6 +145,19 @@ export async function clearAllOrders() {
     .from('orders')
     .delete()
     .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
+
+  return { success: !error, error }
+}
+
+// Reset scan - set all orders back to pending status
+export async function resetScan() {
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      status: 'pending',
+      scanned_at: null
+    })
+    .eq('status', 'scanned')
 
   return { success: !error, error }
 }

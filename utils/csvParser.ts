@@ -6,6 +6,9 @@ const TRACKING_COLUMN_NAMES = ['tracking_number', 'tracking_no', 'no_resi', 'res
 const ORDER_COLUMN_NAMES = ['order_sn', 'order_id', 'orderid', 'no_pesanan']
 const VARIATION_COLUMN_NAMES = ['product_info', 'variasi', 'variation_name', 'nama_variasi']
 const RECEIVER_COLUMN_NAMES = ['order_receiver_name', 'receiver_name', 'nama_penerima', 'penerima']
+const BUYER_COLUMN_NAMES = ['buyer_user_name', 'buyer_username', 'nama_pembeli', 'pembeli']
+const JUMLAH_COLUMN_NAMES = ['jumlah', 'quantity', 'qty', 'amount']
+const SHIPPING_METHOD_COLUMN_NAMES = ['shipping_method', 'metode_pengiriman', 'pengiriman', 'kurir']
 
 interface ParsedData {
   headers: string[]
@@ -15,6 +18,9 @@ interface ParsedData {
     orderColumn: string | null
     variationColumn: string | null
     receiverColumn: string | null
+    buyerColumn: string | null
+    jumlahColumn: string | null
+    shippingMethodColumn: string | null
   }
 }
 
@@ -24,6 +30,9 @@ interface ExtractedOrders {
     orderId: string
     variationName?: string
     receiverName?: string
+    buyerUserName?: string
+    jumlah?: string
+    shippingMethod?: string
   }>
   errors: Array<{ row: number; reason: string }>
 }
@@ -44,6 +53,14 @@ function findColumn(headers: string[], possibleNames: string[]): string | null {
 function extractVariationFromProductInfo(productInfo: string): string {
   if (!productInfo) return ''
   const match = productInfo.match(/Nama Variasi:([^;]+?)(?:;\s*Harga:|Harga:)/i)
+  return match ? match[1].trim() : ''
+}
+
+// Extract jumlah from product_info column
+// Format: "...Jumlah: 1; Nomor Referensi SKU: A;..."
+function extractJumlahFromProductInfo(productInfo: string): string {
+  if (!productInfo) return ''
+  const match = productInfo.match(/Jumlah:\s*(\d+)/i)
   return match ? match[1].trim() : ''
 }
 
@@ -125,6 +142,9 @@ export async function parseFile(file: File): Promise<ParsedData> {
   const orderColumn = findColumn(result.headers, ORDER_COLUMN_NAMES)
   const variationColumn = findColumn(result.headers, VARIATION_COLUMN_NAMES)
   const receiverColumn = findColumn(result.headers, RECEIVER_COLUMN_NAMES)
+  const buyerColumn = findColumn(result.headers, BUYER_COLUMN_NAMES)
+  const jumlahColumn = findColumn(result.headers, JUMLAH_COLUMN_NAMES)
+  const shippingMethodColumn = findColumn(result.headers, SHIPPING_METHOD_COLUMN_NAMES)
 
   return {
     headers: result.headers,
@@ -133,7 +153,10 @@ export async function parseFile(file: File): Promise<ParsedData> {
       trackingColumn,
       orderColumn,
       variationColumn,
-      receiverColumn
+      receiverColumn,
+      buyerColumn,
+      jumlahColumn,
+      shippingMethodColumn
     }
   }
 }
@@ -144,13 +167,19 @@ export function extractOrders(
   trackingColumn: string,
   orderColumn: string,
   variationColumn?: string,
-  receiverColumn?: string
+  receiverColumn?: string,
+  buyerColumn?: string,
+  jumlahColumn?: string,
+  shippingMethodColumn?: string
 ): ExtractedOrders {
   const orders: Array<{
     trackingNumber: string
     orderId: string
     variationName?: string
     receiverName?: string
+    buyerUserName?: string
+    jumlah?: string
+    shippingMethod?: string
   }> = []
   const errors: Array<{ row: number; reason: string }> = []
   const seen = new Set<string>()
@@ -187,12 +216,32 @@ export function extractOrders(
     // Extract receiver name
     const receiverName = receiverColumn ? row[receiverColumn]?.trim() || '' : ''
 
+    // Extract buyer user name
+    const buyerUserName = buyerColumn ? row[buyerColumn]?.trim() || '' : ''
+
+    // Extract jumlah
+    let jumlah = ''
+    if (jumlahColumn) {
+      const rawValue = row[jumlahColumn]?.trim() || ''
+      jumlah = rawValue
+    } else if (variationColumn && variationColumn.toLowerCase() === 'product_info') {
+      // If no jumlah column specified, try to extract from product_info
+      const rawValue = row[variationColumn]?.trim() || ''
+      jumlah = extractJumlahFromProductInfo(rawValue)
+    }
+
+    // Extract shipping method
+    const shippingMethod = shippingMethodColumn ? row[shippingMethodColumn]?.trim() || '' : ''
+
     seen.add(trackingNumber)
     orders.push({
       trackingNumber,
       orderId,
       variationName: variationName || undefined,
-      receiverName: receiverName || undefined
+      receiverName: receiverName || undefined,
+      buyerUserName: buyerUserName || undefined,
+      jumlah: jumlah || undefined,
+      shippingMethod: shippingMethod || undefined
     })
   })
 

@@ -22,7 +22,7 @@ export default function HomePage() {
       <main className="flex-1 w-full max-w-lg mx-auto p-4 space-y-4">
         <CsvUploader onImportComplete={handleDataChange} />
         <ScanInput onScanComplete={handleDataChange} />
-        <Dashboard refreshTrigger={refreshTrigger} />
+        <Dashboard refreshTrigger={refreshTrigger} onDataChange={handleDataChange} />
         <PendingList refreshTrigger={refreshTrigger} />
       </main>
 

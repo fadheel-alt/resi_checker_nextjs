@@ -16,7 +16,10 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
     trackingColumn: '',
     orderColumn: '',
     variationColumn: '',
-    receiverColumn: ''
+    receiverColumn: '',
+    buyerColumn: '',
+    jumlahColumn: '',
+    shippingMethodColumn: ''
   })
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
@@ -37,7 +40,10 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
         trackingColumn: data.suggestedMapping.trackingColumn || '',
         orderColumn: data.suggestedMapping.orderColumn || '',
         variationColumn: data.suggestedMapping.variationColumn || '',
-        receiverColumn: data.suggestedMapping.receiverColumn || ''
+        receiverColumn: data.suggestedMapping.receiverColumn || '',
+        buyerColumn: data.suggestedMapping.buyerColumn || '',
+        jumlahColumn: data.suggestedMapping.jumlahColumn || '',
+        shippingMethodColumn: data.suggestedMapping.shippingMethodColumn || ''
       })
     } catch (err: any) {
       setError(err.message)
@@ -62,7 +68,10 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
         mapping.trackingColumn,
         mapping.orderColumn,
         mapping.variationColumn,
-        mapping.receiverColumn
+        mapping.receiverColumn,
+        mapping.buyerColumn,
+        mapping.jumlahColumn,
+        mapping.shippingMethodColumn
       )
 
       if (orders.length === 0) {
@@ -85,7 +94,10 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
         trackingColumn: '',
         orderColumn: '',
         variationColumn: '',
-        receiverColumn: ''
+        receiverColumn: '',
+        buyerColumn: '',
+        jumlahColumn: '',
+        shippingMethodColumn: ''
       })
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -105,7 +117,10 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
       trackingColumn: '',
       orderColumn: '',
       variationColumn: '',
-      receiverColumn: ''
+      receiverColumn: '',
+      buyerColumn: '',
+      jumlahColumn: '',
+      shippingMethodColumn: ''
     })
     setError(null)
     setResult(null)
@@ -239,6 +254,63 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
             </select>
           </div>
 
+          {/* Buyer User Name Column */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kolom Nama Pembeli (opsional)
+            </label>
+            <select
+              value={mapping.buyerColumn}
+              onChange={(e) => setMapping({ ...mapping, buyerColumn: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Pilih Kolom --</option>
+              {parsedData.headers.map((header: string) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Jumlah Column */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kolom Jumlah (opsional)
+            </label>
+            <select
+              value={mapping.jumlahColumn}
+              onChange={(e) => setMapping({ ...mapping, jumlahColumn: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Pilih Kolom --</option>
+              {parsedData.headers.map((header: string) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Shipping Method Column */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kolom Metode Pengiriman (opsional)
+            </label>
+            <select
+              value={mapping.shippingMethodColumn}
+              onChange={(e) => setMapping({ ...mapping, shippingMethodColumn: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">-- Pilih Kolom --</option>
+              {parsedData.headers.map((header: string) => (
+                <option key={header} value={header}>
+                  {header}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Preview */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">Preview (5 baris pertama)</p>
@@ -248,8 +320,11 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
                   <tr>
                     <th className="px-2 py-1 border-b text-left">Tracking</th>
                     <th className="px-2 py-1 border-b text-left">Order ID</th>
+                    <th className="px-2 py-1 border-b text-left">Pembeli</th>
                     <th className="px-2 py-1 border-b text-left">Variasi</th>
                     <th className="px-2 py-1 border-b text-left">Penerima</th>
+                    <th className="px-2 py-1 border-b text-left">Jumlah</th>
+                    <th className="px-2 py-1 border-b text-left">Pengiriman</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -274,11 +349,20 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
                         <td className="px-2 py-1">
                           {mapping.orderColumn ? row[mapping.orderColumn] || '-' : '-'}
                         </td>
+                        <td className="px-2 py-1">
+                          {mapping.buyerColumn ? row[mapping.buyerColumn] || '-' : '-'}
+                        </td>
                         <td className="px-2 py-1 max-w-xs truncate" title={variationPreview}>
                           {variationPreview}
                         </td>
                         <td className="px-2 py-1">
                           {mapping.receiverColumn ? row[mapping.receiverColumn] || '-' : '-'}
+                        </td>
+                        <td className="px-2 py-1">
+                          {mapping.jumlahColumn ? row[mapping.jumlahColumn] || '-' : '-'}
+                        </td>
+                        <td className="px-2 py-1">
+                          {mapping.shippingMethodColumn ? row[mapping.shippingMethodColumn] || '-' : '-'}
                         </td>
                       </tr>
                     )
