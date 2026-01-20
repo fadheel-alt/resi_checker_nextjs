@@ -106,6 +106,7 @@ export default function CameraScanner({ onScanSuccess, onError }: CameraScannerP
       mounted = false
       stopScanner()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onScanSuccess, onError])
 
   return (
