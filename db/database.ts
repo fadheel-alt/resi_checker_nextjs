@@ -62,12 +62,13 @@ export async function addOrders(orders: Order[]): Promise<AddOrdersResult> {
   return results
 }
 
-// Get order by tracking number
+// Get order by tracking number (active orders only)
 export async function getByTracking(trackingNumber: string) {
   const { data } = await supabase
     .from('orders')
     .select('*')
     .eq('tracking_number', trackingNumber.trim())
+    .is('archived_at', null)
     .single()
 
   return data
@@ -100,16 +101,18 @@ export async function markAsScanned(trackingNumber: string): Promise<MarkAsScann
   return { success: true, order }
 }
 
-// Get stats
+// Get stats (active orders only)
 export async function getStats(): Promise<StatsResult> {
   const { count: total } = await supabase
     .from('orders')
     .select('*', { count: 'exact', head: true })
+    .is('archived_at', null)
 
   const { count: scanned } = await supabase
     .from('orders')
     .select('*', { count: 'exact', head: true })
     .eq('status', 'scanned')
+    .is('archived_at', null)
 
   return {
     total: total || 0,
@@ -118,11 +121,12 @@ export async function getStats(): Promise<StatsResult> {
   }
 }
 
-// Get pending orders (now returns all orders with status for green/yellow display)
+// Get pending orders (active orders only, returns all orders with status for green/yellow display)
 export async function getPendingOrders() {
   const { data } = await supabase
     .from('orders')
     .select('*')
+    .is('archived_at', null)
     .order('status', { ascending: true }) // pending first, then scanned
     .order('created_at', { ascending: false })
 
@@ -139,7 +143,7 @@ export async function getPendingOrders() {
   }))
 }
 
-// Clear all orders
+// Clear all orders (keep for backward compatibility, but prefer archiving)
 export async function clearAllOrders() {
   const { error } = await supabase
     .from('orders')
@@ -149,7 +153,17 @@ export async function clearAllOrders() {
   return { success: !error, error }
 }
 
-// Reset scan - set all orders back to pending status
+// Archive all active orders
+export async function archiveAllOrders(): Promise<{ success: boolean; error?: any }> {
+  const { error } = await supabase
+    .from('orders')
+    .update({ archived_at: new Date().toISOString() })
+    .is('archived_at', null)
+
+  return { success: !error, error }
+}
+
+// Reset scan - set all active orders back to pending status
 export async function resetScan() {
   const { error } = await supabase
     .from('orders')
@@ -158,6 +172,64 @@ export async function resetScan() {
       scanned_at: null
     })
     .eq('status', 'scanned')
+    .is('archived_at', null)
 
   return { success: !error, error }
+}
+
+// Get archived orders from last N days
+export async function getHistoryOrders(daysBack: number = 7) {
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - daysBack)
+
+  const { data } = await supabase
+    .from('orders')
+    .select('*')
+    .not('archived_at', 'is', null)
+    .gte('archived_at', cutoffDate.toISOString())
+    .order('archived_at', { ascending: false })
+
+  return (data || []).map((order: any) => ({
+    id: order.id,
+    trackingNumber: order.tracking_number,
+    orderId: order.order_id,
+    variationName: order.variation_name,
+    receiverName: order.receiver_name,
+    buyerUserName: order.buyer_user_name,
+    jumlah: order.jumlah,
+    shippingMethod: order.shipping_method,
+    status: order.status,
+    scannedAt: order.scanned_at,
+    createdAt: order.created_at,
+    archivedAt: order.archived_at
+  }))
+}
+
+// Restore order back to active state
+export async function restoreOrder(orderId: string): Promise<{ success: boolean; error?: any }> {
+  const { error } = await supabase
+    .from('orders')
+    .update({ archived_at: null })
+    .eq('id', orderId)
+
+  return { success: !error, error }
+}
+
+// Auto-cleanup old archived data
+export async function cleanupOldHistory(daysToKeep: number = 7): Promise<{ success: boolean; deletedCount: number; error?: any }> {
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
+
+  const { data, error } = await supabase
+    .from('orders')
+    .delete()
+    .not('archived_at', 'is', null)
+    .lt('archived_at', cutoffDate.toISOString())
+    .select()
+
+  return {
+    success: !error,
+    deletedCount: data?.length || 0,
+    error
+  }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getStats, clearAllOrders, resetScan } from '@/db/database'
+import { getStats, archiveAllOrders, resetScan } from '@/db/database'
 
 interface DashboardProps {
   refreshTrigger: number
@@ -17,9 +17,9 @@ interface StatsData {
 export default function Dashboard({ refreshTrigger, onDataChange }: DashboardProps) {
   const [stats, setStats] = useState<StatsData>({ total: 0, scanned: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
-  const [clearing, setClearing] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [resettingScan, setResettingScan] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showResetScanConfirm, setShowResetScanConfirm] = useState(false)
 
   const loadStats = useCallback(async () => {
@@ -37,17 +37,17 @@ export default function Dashboard({ refreshTrigger, onDataChange }: DashboardPro
     loadStats()
   }, [loadStats, refreshTrigger])
 
-  const handleClear = async () => {
-    setClearing(true)
+  const handleArchive = async () => {
+    setArchiving(true)
     try {
-      await clearAllOrders()
+      await archiveAllOrders()
       setStats({ total: 0, scanned: 0, pending: 0 })
-      setShowConfirm(false)
+      setShowArchiveConfirm(false)
       onDataChange?.()
     } catch (err) {
-      console.error('Error clearing data:', err)
+      console.error('Error archiving data:', err)
     } finally {
-      setClearing(false)
+      setArchiving(false)
     }
   }
 
@@ -91,10 +91,10 @@ export default function Dashboard({ refreshTrigger, onDataChange }: DashboardPro
               </button>
             )}
             <button
-              onClick={() => setShowConfirm(true)}
-              className="text-xs text-red-600 hover:text-red-800"
+              onClick={() => setShowArchiveConfirm(true)}
+              className="text-xs text-green-600 hover:text-green-800"
             >
-              Reset Data
+              Simpan ke History
             </button>
           </div>
         )}
@@ -139,25 +139,25 @@ export default function Dashboard({ refreshTrigger, onDataChange }: DashboardPro
         </p>
       )}
 
-      {/* Confirm Dialog - Reset Data */}
-      {showConfirm && (
+      {/* Confirm Dialog - Archive Data */}
+      {showArchiveConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-4 max-w-sm w-full">
-            <h3 className="font-semibold text-gray-800 mb-2">Reset Data?</h3>
+            <h3 className="font-semibold text-gray-800 mb-2">Simpan ke History?</h3>
             <p className="text-sm text-gray-600 mb-4">
-              Semua data pesanan akan dihapus. Tindakan ini tidak dapat dibatalkan.
+              Semua data pesanan akan dipindahkan ke history dan dapat dipanggil kembali di halaman Data Pesanan. Data akan tersimpan selama 7 hari.
             </p>
             <div className="flex gap-2">
               <button
-                onClick={handleClear}
-                disabled={clearing}
-                className="flex-1 py-2 px-4 bg-red-600 text-white rounded font-medium hover:bg-red-700 disabled:opacity-50"
+                onClick={handleArchive}
+                disabled={archiving}
+                className="flex-1 py-2 px-4 bg-green-600 text-white rounded font-medium hover:bg-green-700 disabled:opacity-50"
               >
-                {clearing ? 'Menghapus...' : 'Ya, Reset'}
+                {archiving ? 'Menyimpan...' : 'Ya, Simpan'}
               </button>
               <button
-                onClick={() => setShowConfirm(false)}
-                disabled={clearing}
+                onClick={() => setShowArchiveConfirm(false)}
+                disabled={archiving}
                 className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300 disabled:opacity-50"
               >
                 Batal

@@ -1,29 +1,37 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-import CsvUploader from '@/components/CsvUploader'
-import ScanInput from '@/components/ScanInput'
-import Dashboard from '@/components/Dashboard'
-import PendingList from '@/components/PendingList'
+import Sidebar from '@/components/Sidebar'
+import LandingCard from '@/components/LandingCard'
+import { Package, History } from 'lucide-react'
 
-export default function HomePage() {
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
-
-  const handleDataChange = useCallback(() => {
-    setRefreshTrigger((prev) => prev + 1)
-  }, [])
+export default function LandingPage() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Header />
+      <Header onMenuClick={() => setSidebarOpen(true)} title="Resi Checker" />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="flex-1 w-full max-w-lg mx-auto p-4 space-y-4">
-        <CsvUploader onImportComplete={handleDataChange} />
-        <ScanInput onScanComplete={handleDataChange} />
-        <Dashboard refreshTrigger={refreshTrigger} onDataChange={handleDataChange} />
-        <PendingList refreshTrigger={refreshTrigger} />
+      <main className="flex-1 w-full max-w-2xl mx-auto p-6 flex items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+          <LandingCard
+            title="Check Resi"
+            description="Scan dan cocokkan resi pesanan"
+            icon={<Package className="w-12 h-12" />}
+            href="/check-resi"
+            color="blue"
+          />
+          <LandingCard
+            title="Data Pesanan"
+            description="Lihat history data yang sudah disimpan"
+            icon={<History className="w-12 h-12" />}
+            href="/data-pesanan"
+            color="green"
+          />
+        </div>
       </main>
 
       <Footer />
