@@ -7,9 +7,24 @@ import Sidebar from '@/components/Sidebar'
 import HistoryTable from '@/components/HistoryTable'
 import { getHistoryOrders, restoreOrder } from '@/db/database'
 
+interface HistoryOrder {
+  id: any
+  trackingNumber: any
+  orderId: any
+  variationName: any
+  receiverName: any
+  buyerUserName: any
+  jumlah: any
+  shippingMethod: any
+  status: any
+  scannedAt: any
+  createdAt: any
+  archivedAt: any
+}
+
 export default function DataPesananPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [orders, setOrders] = useState([])
+  const [orders, setOrders] = useState<HistoryOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [daysFilter, setDaysFilter] = useState(7)
 
