@@ -63,7 +63,7 @@ export default function SaveToHistoryDialog({
           >
             <div className="font-semibold">Simpan yang sudah di-scan saja</div>
             <div className="text-xs text-green-100 mt-1">
-              Hanya pesanan dengan status "scanned" yang akan disimpan
+              Hanya pesanan dengan status &apos;scanned&apos; yang akan disimpan
             </div>
           </button>
 
