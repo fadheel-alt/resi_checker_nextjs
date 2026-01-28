@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getPendingOrders } from '@/db/database'
+import { getPendingOrders, resetSelectedScans } from '@/db/database'
+import { calculateDeadline, isOrderLate, formatDeadline } from '@/utils/deadlineCalculator'
+import SaveToHistoryDialog from '@/components/SaveToHistoryDialog'
 
 interface PendingListProps {
   refreshTrigger: number
+  onDataChange?: () => void
 }
 
 interface Order {
@@ -17,12 +20,16 @@ interface Order {
   jumlah?: string
   shippingMethod?: string
   status: 'pending' | 'scanned'
+  orderCreationDate?: string
 }
 
-export default function PendingList({ refreshTrigger }: PendingListProps) {
+export default function PendingList({ refreshTrigger, onDataChange }: PendingListProps) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isResetting, setIsResetting] = useState(false)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
 
   const loadOrders = useCallback(async () => {
     try {
@@ -38,6 +45,49 @@ export default function PendingList({ refreshTrigger }: PendingListProps) {
   useEffect(() => {
     loadOrders()
   }, [loadOrders, refreshTrigger])
+
+  const toggleSelection = (orderId: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId)
+      } else {
+        newSet.add(orderId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === orders.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(orders.map(order => order.id)))
+    }
+  }
+
+  const isAllSelected = orders.length > 0 && selectedIds.size === orders.length
+
+  const handleResetScan = async () => {
+    if (selectedIds.size === 0) return
+
+    const confirmed = window.confirm(
+      `Reset scan untuk ${selectedIds.size} pesanan yang dipilih?`
+    )
+    if (!confirmed) return
+
+    setIsResetting(true)
+    try {
+      await resetSelectedScans(Array.from(selectedIds))
+      setSelectedIds(new Set())
+      onDataChange?.()
+    } catch (err) {
+      console.error('Error resetting scans:', err)
+      alert('Gagal reset scan')
+    } finally {
+      setIsResetting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -59,10 +109,46 @@ export default function PendingList({ refreshTrigger }: PendingListProps) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="text-sm text-blue-700 font-medium">
+            {selectedIds.size} pesanan dipilih
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleResetScan}
+              disabled={isResetting}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isResetting ? 'Mereset...' : 'Reset Scan'}
+            </button>
+            <button
+              onClick={() => setShowSaveDialog(true)}
+              className="px-3 py-1 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
+            >
+              Simpan ke History
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-3">
-        <h2 className="font-semibold text-gray-800">
-          Daftar Pesanan ({pendingCount} pending, {scannedCount} scanned)
-        </h2>
+        <div className="flex items-center gap-3">
+          {/* Select All Checkbox */}
+          {orders.length > 0 && (
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+              aria-label="Select all"
+            />
+          )}
+          <h2 className="font-semibold text-gray-800">
+            Daftar Pesanan ({pendingCount} pending, {scannedCount} scanned)
+          </h2>
+        </div>
         {hasMore && (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -81,44 +167,72 @@ export default function PendingList({ refreshTrigger }: PendingListProps) {
           const trackingColor = isScanned ? 'text-green-800' : 'text-yellow-800'
           const detailColor = isScanned ? 'text-green-600' : 'text-yellow-600'
 
+          // Calculate deadline
+          const deadline = calculateDeadline(order.orderCreationDate)
+          const isLate = isOrderLate(deadline, order.status)
+          const deadlineText = formatDeadline(deadline)
+
           return (
             <div
               key={order.id}
-              className={`p-2 ${bgColor} border ${borderColor} rounded text-sm`}
+              className={`p-2 ${bgColor} border ${borderColor} rounded text-sm ${
+                selectedIds.has(order.id) ? 'ring-2 ring-blue-500' : ''
+              }`}
             >
-              <div className={`font-mono ${trackingColor} break-all`}>
-                {order.trackingNumber}
+              {/* Checkbox and Tracking Number Row */}
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(order.id)}
+                  onChange={() => toggleSelection(order.id)}
+                  className="mt-1 w-4 h-4 rounded border-gray-300 cursor-pointer flex-shrink-0"
+                  aria-label={`Select ${order.trackingNumber}`}
+                />
+                <div className="flex-1">
+                  <div className={`font-mono ${trackingColor} break-all`}>
+                    {order.trackingNumber}
+                  </div>
+
+                  {/* Deadline Display */}
+                  {deadline && (
+                    <div className={`text-xs mt-1 ${isLate ? 'text-red-600 font-semibold' : detailColor}`}>
+                      Batas kirim: {deadlineText}
+                    </div>
+                  )}
+
+                  {/* Existing order details */}
+                  {order.orderId && (
+                    <div className={`text-xs ${detailColor} mt-1`}>
+                      Order: {order.orderId}
+                    </div>
+                  )}
+                  {order.buyerUserName && (
+                    <div className={`text-xs ${detailColor} mt-1`}>
+                      Pembeli: {order.buyerUserName}
+                    </div>
+                  )}
+                  {order.variationName && (
+                    <div className={`text-xs ${detailColor} mt-1`}>
+                      Variasi: {order.variationName}
+                    </div>
+                  )}
+                  {order.receiverName && (
+                    <div className={`text-xs ${detailColor} mt-1`}>
+                      Penerima: {order.receiverName}
+                    </div>
+                  )}
+                  {order.jumlah && (
+                    <div className={`text-xs ${detailColor} mt-1`}>
+                      Jumlah: {order.jumlah}
+                    </div>
+                  )}
+                  {order.shippingMethod && (
+                    <div className={`text-xs ${detailColor} mt-1`}>
+                      Pengiriman: {order.shippingMethod}
+                    </div>
+                  )}
+                </div>
               </div>
-              {order.orderId && (
-                <div className={`text-xs ${detailColor} mt-1`}>
-                  Order: {order.orderId}
-                </div>
-              )}
-              {order.buyerUserName && (
-                <div className={`text-xs ${detailColor} mt-1`}>
-                  Pembeli: {order.buyerUserName}
-                </div>
-              )}
-              {order.variationName && (
-                <div className={`text-xs ${detailColor} mt-1`}>
-                  Variasi: {order.variationName}
-                </div>
-              )}
-              {order.receiverName && (
-                <div className={`text-xs ${detailColor} mt-1`}>
-                  Penerima: {order.receiverName}
-                </div>
-              )}
-              {order.jumlah && (
-                <div className={`text-xs ${detailColor} mt-1`}>
-                  Jumlah: {order.jumlah}
-                </div>
-              )}
-              {order.shippingMethod && (
-                <div className={`text-xs ${detailColor} mt-1`}>
-                  Pengiriman: {order.shippingMethod}
-                </div>
-              )}
             </div>
           )
         })}
@@ -129,6 +243,17 @@ export default function PendingList({ refreshTrigger }: PendingListProps) {
           +{orders.length - 5} lainnya
         </p>
       )}
+
+      {/* SaveToHistoryDialog */}
+      <SaveToHistoryDialog
+        isOpen={showSaveDialog}
+        selectedIds={Array.from(selectedIds)}
+        onClose={() => setShowSaveDialog(false)}
+        onSuccess={() => {
+          setSelectedIds(new Set())
+          onDataChange?.()
+        }}
+      />
     </div>
   )
 }

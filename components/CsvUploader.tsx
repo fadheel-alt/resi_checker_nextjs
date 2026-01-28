@@ -19,10 +19,17 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
     receiverColumn: '',
     buyerColumn: '',
     jumlahColumn: '',
-    shippingMethodColumn: ''
+    shippingMethodColumn: '',
+    orderCreationDateColumn: ''
   })
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<{
+    success: number
+    duplicates: number
+    restored: number
+    parseErrors: number
+    total: number
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,7 +50,8 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
         receiverColumn: data.suggestedMapping.receiverColumn || '',
         buyerColumn: data.suggestedMapping.buyerColumn || '',
         jumlahColumn: data.suggestedMapping.jumlahColumn || '',
-        shippingMethodColumn: data.suggestedMapping.shippingMethodColumn || ''
+        shippingMethodColumn: data.suggestedMapping.shippingMethodColumn || '',
+        orderCreationDateColumn: data.suggestedMapping.orderCreationDateColumn || ''
       })
     } catch (err: any) {
       setError(err.message)
@@ -71,7 +79,8 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
         mapping.receiverColumn,
         mapping.buyerColumn,
         mapping.jumlahColumn,
-        mapping.shippingMethodColumn
+        mapping.shippingMethodColumn,
+        mapping.orderCreationDateColumn
       )
 
       if (orders.length === 0) {
@@ -84,6 +93,7 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
       setResult({
         success: dbResult.success,
         duplicates: dbResult.duplicates.length,
+        restored: dbResult.restored,
         parseErrors: parseErrors.length,
         total: parsedData.rows.length
       })
@@ -97,7 +107,8 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
         receiverColumn: '',
         buyerColumn: '',
         jumlahColumn: '',
-        shippingMethodColumn: ''
+        shippingMethodColumn: '',
+        orderCreationDateColumn: ''
       })
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -120,7 +131,8 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
       receiverColumn: '',
       buyerColumn: '',
       jumlahColumn: '',
-      shippingMethodColumn: ''
+      shippingMethodColumn: '',
+      orderCreationDateColumn: ''
     })
     setError(null)
     setResult(null)
@@ -154,12 +166,27 @@ export default function CsvUploader({ onImportComplete }: CsvUploaderProps) {
       {result && (
         <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
           <p className="font-medium">Import berhasil!</p>
-          <p>{result.success} pesanan ditambahkan</p>
-          {result.duplicates > 0 && (
-            <p className="text-yellow-700">{result.duplicates} duplicate diabaikan</p>
+
+          {result.success > 0 && (
+            <p>{result.success} pesanan baru ditambahkan</p>
           )}
+
+          {result.restored > 0 && (
+            <p className="text-blue-700">
+              {result.restored} pesanan dipulihkan dari history
+            </p>
+          )}
+
+          {result.duplicates > 0 && (
+            <p className="text-yellow-700">
+              {result.duplicates} duplicate diabaikan (sudah ada di daftar aktif)
+            </p>
+          )}
+
           {result.parseErrors > 0 && (
-            <p className="text-yellow-700">{result.parseErrors} baris error</p>
+            <p className="text-yellow-700">
+              {result.parseErrors} baris error
+            </p>
           )}
         </div>
       )}

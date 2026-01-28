@@ -36,7 +36,7 @@ export default function CheckResiPage() {
         <CsvUploader onImportComplete={handleDataChange} />
         <ScanInput onScanComplete={handleDataChange} />
         <Dashboard refreshTrigger={refreshTrigger} onDataChange={handleDataChange} />
-        <PendingList refreshTrigger={refreshTrigger} />
+        <PendingList refreshTrigger={refreshTrigger} onDataChange={handleDataChange} />
       </main>
 
       <Footer />

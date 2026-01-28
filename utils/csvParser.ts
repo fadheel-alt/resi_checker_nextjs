@@ -9,6 +9,7 @@ const RECEIVER_COLUMN_NAMES = ['order_receiver_name', 'receiver_name', 'nama_pen
 const BUYER_COLUMN_NAMES = ['buyer_user_name', 'buyer_username', 'nama_pembeli', 'pembeli']
 const JUMLAH_COLUMN_NAMES = ['jumlah', 'quantity', 'qty', 'amount']
 const SHIPPING_METHOD_COLUMN_NAMES = ['shipping_method', 'metode_pengiriman', 'pengiriman', 'kurir']
+const ORDER_CREATION_DATE_COLUMN_NAMES = ['order_creation_date', 'order_creation_time', 'waktu_pesanan_dibuat', 'creation_time']
 
 interface ParsedData {
   headers: string[]
@@ -21,6 +22,7 @@ interface ParsedData {
     buyerColumn: string | null
     jumlahColumn: string | null
     shippingMethodColumn: string | null
+    orderCreationDateColumn: string | null
   }
 }
 
@@ -33,6 +35,7 @@ interface ExtractedOrders {
     buyerUserName?: string
     jumlah?: string
     shippingMethod?: string
+    orderCreationDate?: string
   }>
   errors: Array<{ row: number; reason: string }>
 }
@@ -62,6 +65,29 @@ function extractJumlahFromProductInfo(productInfo: string): string {
   if (!productInfo) return ''
   const match = productInfo.match(/Jumlah:\s*(\d+)/i)
   return match ? match[1].trim() : ''
+}
+
+// Parse order creation date from Excel
+// Format: "2026-01-28 00:52" or "2026-01-28 01:15"
+function parseOrderCreationDate(dateString: string): string | null {
+  if (!dateString || !dateString.trim()) return null
+
+  try {
+    const trimmed = dateString.trim()
+    // Create Date object from string (handle "YYYY-MM-DD HH:mm" format)
+    const date = new Date(trimmed.replace(' ', 'T'))
+
+    // Validate date
+    if (isNaN(date.getTime())) {
+      console.warn(`Invalid date format: ${dateString}`)
+      return null
+    }
+
+    return date.toISOString()
+  } catch (error) {
+    console.error(`Error parsing date: ${dateString}`, error)
+    return null
+  }
 }
 
 // Parse XLSX file
@@ -145,6 +171,7 @@ export async function parseFile(file: File): Promise<ParsedData> {
   const buyerColumn = findColumn(result.headers, BUYER_COLUMN_NAMES)
   const jumlahColumn = findColumn(result.headers, JUMLAH_COLUMN_NAMES)
   const shippingMethodColumn = findColumn(result.headers, SHIPPING_METHOD_COLUMN_NAMES)
+  const orderCreationDateColumn = findColumn(result.headers, ORDER_CREATION_DATE_COLUMN_NAMES)
 
   return {
     headers: result.headers,
@@ -156,7 +183,8 @@ export async function parseFile(file: File): Promise<ParsedData> {
       receiverColumn,
       buyerColumn,
       jumlahColumn,
-      shippingMethodColumn
+      shippingMethodColumn,
+      orderCreationDateColumn
     }
   }
 }
@@ -170,7 +198,8 @@ export function extractOrders(
   receiverColumn?: string,
   buyerColumn?: string,
   jumlahColumn?: string,
-  shippingMethodColumn?: string
+  shippingMethodColumn?: string,
+  orderCreationDateColumn?: string
 ): ExtractedOrders {
   const orders: Array<{
     trackingNumber: string
@@ -180,6 +209,7 @@ export function extractOrders(
     buyerUserName?: string
     jumlah?: string
     shippingMethod?: string
+    orderCreationDate?: string
   }> = []
   const errors: Array<{ row: number; reason: string }> = []
   const seen = new Set<string>()
@@ -233,6 +263,11 @@ export function extractOrders(
     // Extract shipping method
     const shippingMethod = shippingMethodColumn ? row[shippingMethodColumn]?.trim() || '' : ''
 
+    // Extract order creation date
+    const orderCreationDate = orderCreationDateColumn
+      ? parseOrderCreationDate(row[orderCreationDateColumn]?.trim() || '')
+      : null
+
     seen.add(trackingNumber)
     orders.push({
       trackingNumber,
@@ -241,7 +276,8 @@ export function extractOrders(
       receiverName: receiverName || undefined,
       buyerUserName: buyerUserName || undefined,
       jumlah: jumlah || undefined,
-      shippingMethod: shippingMethod || undefined
+      shippingMethod: shippingMethod || undefined,
+      orderCreationDate: orderCreationDate || undefined
     })
   })
 

@@ -20,12 +20,15 @@ interface ArchivedOrder {
 interface HistoryTableProps {
   orders: ArchivedOrder[]
   onRestore: (orderId: string) => Promise<void>
+  onDelete: (orderId: string) => Promise<void>
 }
 
-export default function HistoryTable({ orders, onRestore }: HistoryTableProps) {
+export default function HistoryTable({ orders, onRestore, onDelete }: HistoryTableProps) {
   const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isRestoringBulk, setIsRestoringBulk] = useState(false)
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false)
 
   const handleRestore = async (orderId: string) => {
     const confirmed = window.confirm('Restore pesanan ini kembali ke data aktif?')
@@ -67,6 +70,55 @@ export default function HistoryTable({ orders, onRestore }: HistoryTableProps) {
       alert('Gagal restore beberapa pesanan')
     } finally {
       setIsRestoringBulk(false)
+    }
+  }
+
+  const handleDelete = async (orderId: string) => {
+    const confirmed = window.confirm(
+      'PERHATIAN: Hapus permanen pesanan ini dari database?\n\n' +
+      'Data yang dihapus tidak dapat dikembalikan!'
+    )
+    if (!confirmed) return
+
+    setDeletingId(orderId)
+    try {
+      await onDelete(orderId)
+      // Remove from selection after successful delete
+      setSelectedIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(orderId)
+        return newSet
+      })
+    } catch (err) {
+      console.error('Error deleting order:', err)
+      alert('Gagal menghapus pesanan')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+
+    const confirmed = window.confirm(
+      `PERHATIAN: Hapus permanen ${selectedIds.size} pesanan yang dipilih?\n\n` +
+      'Data yang dihapus tidak dapat dikembalikan!'
+    )
+    if (!confirmed) return
+
+    setIsDeletingBulk(true)
+    try {
+      // Delete all selected orders in parallel
+      await Promise.all(
+        Array.from(selectedIds).map(id => onDelete(id))
+      )
+      // Clear selection after successful delete
+      setSelectedIds(new Set())
+    } catch (err) {
+      console.error('Error deleting orders:', err)
+      alert('Gagal menghapus beberapa pesanan')
+    } finally {
+      setIsDeletingBulk(false)
     }
   }
 
@@ -119,13 +171,25 @@ export default function HistoryTable({ orders, onRestore }: HistoryTableProps) {
           <div className="text-sm text-blue-700 font-medium">
             {selectedIds.size} pesanan dipilih
           </div>
-          <button
-            onClick={handleBulkRestore}
-            disabled={isRestoringBulk}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 text-sm"
-          >
-            {isRestoringBulk ? 'Restoring...' : `Restore ${selectedIds.size} Pesanan`}
-          </button>
+          <div className="flex gap-2">
+            {/* Restore Button */}
+            <button
+              onClick={handleBulkRestore}
+              disabled={isRestoringBulk || isDeletingBulk}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 text-sm"
+            >
+              {isRestoringBulk ? 'Restoring...' : `Restore ${selectedIds.size} Pesanan`}
+            </button>
+
+            {/* Delete Button - NEW */}
+            <button
+              onClick={handleBulkDelete}
+              disabled={isDeletingBulk || isRestoringBulk}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 text-sm"
+            >
+              {isDeletingBulk ? 'Deleting...' : `Hapus ${selectedIds.size} Pesanan`}
+            </button>
+          </div>
         </div>
       )}
 
@@ -215,13 +279,25 @@ export default function HistoryTable({ orders, onRestore }: HistoryTableProps) {
                 {formatDate(order.archivedAt)}
               </td>
               <td className="px-4 py-3">
-                <button
-                  onClick={() => handleRestore(order.id)}
-                  disabled={restoringId === order.id}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
-                >
-                  {restoringId === order.id ? 'Restoring...' : 'Restore'}
-                </button>
+                <div className="flex gap-3">
+                  {/* Restore Button */}
+                  <button
+                    onClick={() => handleRestore(order.id)}
+                    disabled={restoringId === order.id || deletingId === order.id}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                  >
+                    {restoringId === order.id ? 'Restoring...' : 'Restore'}
+                  </button>
+
+                  {/* Delete Button - NEW */}
+                  <button
+                    onClick={() => handleDelete(order.id)}
+                    disabled={deletingId === order.id || restoringId === order.id}
+                    className="text-sm text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                  >
+                    {deletingId === order.id ? 'Deleting...' : 'Hapus'}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

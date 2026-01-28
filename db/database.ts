@@ -8,11 +8,13 @@ interface Order {
   buyerUserName?: string
   jumlah?: string
   shippingMethod?: string
+  orderCreationDate?: string
 }
 
 interface AddOrdersResult {
   success: number
   duplicates: string[]
+  restored: number
   errors: Array<{ tracking: string; error: string }>
 }
 
@@ -29,11 +31,83 @@ interface StatsResult {
   pending: number
 }
 
+// Check if tracking number exists in archived orders
+async function checkArchivedOrder(trackingNumber: string) {
+  const { data } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('tracking_number', trackingNumber.trim())
+    .not('archived_at', 'is', null)
+    .single()
+
+  return data
+}
+
+// Restore archived order back to active with updated data
+async function restoreArchivedOrder(
+  archivedOrderId: string,
+  newOrderData: Order
+): Promise<{ success: boolean; error?: any }> {
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      // Restore to active state
+      archived_at: null,
+      status: 'pending',
+      scanned_at: null,
+
+      // Update with new data from Excel
+      order_id: newOrderData.orderId,
+      variation_name: newOrderData.variationName || null,
+      receiver_name: newOrderData.receiverName || null,
+      buyer_user_name: newOrderData.buyerUserName || null,
+      jumlah: newOrderData.jumlah || null,
+      shipping_method: newOrderData.shippingMethod || null,
+      order_creation_date: newOrderData.orderCreationDate || null,
+    })
+    .eq('id', archivedOrderId)
+
+  return { success: !error, error }
+}
+
 // Add orders from CSV/XLSX
 export async function addOrders(orders: Order[]): Promise<AddOrdersResult> {
-  const results: AddOrdersResult = { success: 0, duplicates: [], errors: [] }
+  const results: AddOrdersResult = {
+    success: 0,
+    duplicates: [],
+    restored: 0,
+    errors: []
+  }
 
   for (const order of orders) {
+    // STEP 1: Check if exists in active orders
+    const activeOrder = await getByTracking(order.trackingNumber)
+
+    if (activeOrder) {
+      // TRUE DUPLICATE: Already in active orders, skip
+      results.duplicates.push(order.trackingNumber)
+      continue
+    }
+
+    // STEP 2: Check if exists in archived orders
+    const archivedOrder = await checkArchivedOrder(order.trackingNumber)
+
+    if (archivedOrder) {
+      // RESTORE: Exists in history, restore it
+      const { success, error } = await restoreArchivedOrder(archivedOrder.id, order)
+
+      if (success) {
+        results.restored++
+      } else {
+        results.errors.push({
+          tracking: order.trackingNumber,
+          error: error?.message || 'Failed to restore archived order'
+        })
+      }
+      continue
+    }
+
+    // STEP 3: New order, insert normally
     const { error } = await supabase
       .from('orders')
       .insert({
@@ -44,16 +118,16 @@ export async function addOrders(orders: Order[]): Promise<AddOrdersResult> {
         buyer_user_name: order.buyerUserName || null,
         jumlah: order.jumlah || null,
         shipping_method: order.shippingMethod || null,
+        order_creation_date: order.orderCreationDate || null,
         status: 'pending'
       })
       .select()
 
     if (error) {
-      if (error.code === '23505') { // Unique constraint violation
-        results.duplicates.push(order.trackingNumber)
-      } else {
-        results.errors.push({ tracking: order.trackingNumber, error: error.message })
-      }
+      results.errors.push({
+        tracking: order.trackingNumber,
+        error: error.message
+      })
     } else {
       results.success++
     }
@@ -139,7 +213,8 @@ export async function getPendingOrders() {
     buyerUserName: order.buyer_user_name,
     jumlah: order.jumlah,
     shippingMethod: order.shipping_method,
-    status: order.status
+    status: order.status,
+    orderCreationDate: order.order_creation_date
   }))
 }
 
@@ -215,6 +290,41 @@ export async function restoreOrder(orderId: string): Promise<{ success: boolean;
   return { success: !error, error }
 }
 
+// Permanently delete a single archived order
+export async function deleteOrder(orderId: string): Promise<{ success: boolean; error?: any }> {
+  const { error } = await supabase
+    .from('orders')
+    .delete()
+    .eq('id', orderId)
+    .not('archived_at', 'is', null) // Safety: only delete archived orders
+
+  return { success: !error, error }
+}
+
+// Permanently delete multiple archived orders
+export async function deleteOrders(orderIds: string[]): Promise<{
+  success: boolean;
+  deletedCount: number;
+  error?: any
+}> {
+  if (orderIds.length === 0) {
+    return { success: false, deletedCount: 0, error: 'No order IDs provided' }
+  }
+
+  const { data, error } = await supabase
+    .from('orders')
+    .delete()
+    .in('id', orderIds)
+    .not('archived_at', 'is', null)
+    .select()
+
+  return {
+    success: !error,
+    deletedCount: data?.length || 0,
+    error
+  }
+}
+
 // Auto-cleanup old archived data
 export async function cleanupOldHistory(daysToKeep: number = 7): Promise<{ success: boolean; deletedCount: number; error?: any }> {
   const cutoffDate = new Date()
@@ -230,6 +340,53 @@ export async function cleanupOldHistory(daysToKeep: number = 7): Promise<{ succe
   return {
     success: !error,
     deletedCount: data?.length || 0,
+    error
+  }
+}
+
+// Reset scan status for specific orders
+export async function resetSelectedScans(orderIds: string[]): Promise<{ success: boolean; error?: any }> {
+  if (orderIds.length === 0) {
+    return { success: false, error: 'No order IDs provided' }
+  }
+
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      status: 'pending',
+      scanned_at: null
+    })
+    .in('id', orderIds)
+    .is('archived_at', null)
+
+  return { success: !error, error }
+}
+
+// Archive selected orders, with option to filter by scanned status
+export async function archiveSelectedOrders(
+  orderIds: string[],
+  scannedOnly: boolean = false
+): Promise<{ success: boolean; archivedCount: number; error?: any }> {
+  if (orderIds.length === 0) {
+    return { success: false, archivedCount: 0, error: 'No order IDs provided' }
+  }
+
+  let query = supabase
+    .from('orders')
+    .update({ archived_at: new Date().toISOString() })
+    .in('id', orderIds)
+    .is('archived_at', null)
+
+  // If scannedOnly is true, only archive orders with status 'scanned'
+  if (scannedOnly) {
+    query = query.eq('status', 'scanned')
+  }
+
+  const { data, error } = await query.select()
+
+  return {
+    success: !error,
+    archivedCount: data?.length || 0,
     error
   }
 }

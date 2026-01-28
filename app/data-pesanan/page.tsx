@@ -5,7 +5,7 @@ import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import Sidebar from '@/components/Sidebar'
 import HistoryTable from '@/components/HistoryTable'
-import { getHistoryOrders, restoreOrder } from '@/db/database'
+import { getHistoryOrders, restoreOrder, deleteOrder } from '@/db/database'
 
 interface HistoryOrder {
   id: any
@@ -54,6 +54,16 @@ export default function DataPesananPage() {
     }
   }
 
+  const handleDelete = async (orderId: string) => {
+    const result = await deleteOrder(orderId)
+    if (result.success) {
+      // Refresh history list
+      loadHistory()
+    } else {
+      throw new Error('Failed to delete order')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <Header onMenuClick={() => setSidebarOpen(true)} title="Data Pesanan" />
@@ -98,7 +108,7 @@ export default function DataPesananPage() {
               Tidak ada data history dalam {daysFilter} hari terakhir
             </div>
           ) : (
-            <HistoryTable orders={orders} onRestore={handleRestore} />
+            <HistoryTable orders={orders} onRestore={handleRestore} onDelete={handleDelete} />
           )}
         </div>
       </main>
